@@ -1,11 +1,12 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
+import sqlalchemy
+import sqlalchemy.exc
 from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
 from sqlalchemy import DateTime, Float, ForeignKey, Table, Column, String, Integer, select
 from marshmallow import ValidationError
 from typing import List, Optional
-from __future__ import annotations
 import os
 import datetime
 from password import password
@@ -37,7 +38,7 @@ class User(Base):
     city: Mapped[str] = mapped_column(String(20), nullable=False)
     state: Mapped[str] = mapped_column(String(2), nullable=False)
     zip_code: Mapped[str] = mapped_column(String(5), nullable=False)
-    email: Mapped[str] = mapped_column(String(200), nullable=False)
+    email: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
 
     orders: Mapped[List["Order"]] = relationship(back_populates="user")
 
@@ -45,7 +46,7 @@ class User(Base):
 class Order(Base):
     __tablename__ = "orders"
     id: Mapped[int] = mapped_column(primary_key=True)
-    order_date: Mapped[DateTime] = mapped_column(DateTime, default = datetime.now)
+    order_date: Mapped[DateTime] = mapped_column(DateTime, default = datetime.datetime.now())
     user_id : Mapped[int] = mapped_column(ForeignKey("users.id"))
 
     user: Mapped["User"] = relationship(back_populates="orders")
@@ -94,9 +95,10 @@ products_schema = ProductSchema(many=True)
 
 @app.route('/')
 def home():
-    return 'Welcome to my Flask E Commerce Application'
+    return 'Welcome to my E Commerce API'
 
-# User Endpoints
+#========== User Endpoints ===========
+
 # GET /users: Retrieve all users
 
 @app.route('/users', methods=['GET'])
@@ -107,7 +109,30 @@ def get_users():
     return users_schema.jsonify(users), 200
 
 # GET /users/<id>: Retrieve a user by ID
+
+@app.route('/users/<int:id>', methods=['GET'])
+def get_user(id):
+    user = db.session.get(User, id)
+    return user_schema.jsonify(user), 200
+
 # POST /users: Create a new user
+
+@app.route('/users', methods=['POST'])
+def create_user():
+    try:
+        user_data = user_schema.load(request.json)
+    except ValidationError as e:
+        return jsonify(e.messages), 400
+    
+    try:
+        new_user = User(name=user_data['name'], street_address=user_data['street_address'], city=user_data['city'], state=user_data['state'], zip_code=user_data['zip_code'], email=user_data['email'])
+        db.session.add(new_user)
+        db.session.commit()
+    except sqlalchemy.exc.IntegrityError as e:
+        return jsonify({"message": "User with e-mail already exists!"})
+
+    return jsonify({"message": f"{new_user.name} successfully added!"}), 201
+
 # PUT /users/<id>: Update a user by ID
 # DELETE /users/<id>: Delete a user by ID
 
@@ -124,3 +149,10 @@ def get_users():
 # DELETE /orders/<order_id>/remove_product: Remove a product from an order
 # GET /orders/user/<user_id>: Get all orders for a user
 # GET /orders/<order_id>/products: Get all products for an order
+
+if __name__ == "__main__":
+    with app.app_context():
+        #db.drop_all()
+        db.create_all()
+
+    app.run(debug=True)
