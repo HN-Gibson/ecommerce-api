@@ -182,21 +182,83 @@ def delete_user(id):
 
 
 
-# Product Endpoints
-# GET /products: Retrieve all products
-# GET /products/<id>: Retrieve a product by ID
-# POST /products: Create a new product
-# PUT /products/<id>: Update a product by ID
-# DELETE /products/<id>: Delete a product by ID
+#========== Product Endpoints ==========
+
+#===== Retrieve all products
+
+@app.route('/products', methods=['GET'])
+def get_products():
+    query = select(Product)
+    users = db.session.execute(query).scalars().all()
+
+    return products_schema.jsonify(users), 200
+
+#===== Retrieve a product by ID
+
+@app.route('/products/<int:id>', methods=['GET'])
+def get_product(id):
+    user = db.session.get(Product, id)
+    return product_schema.jsonify(user), 200
+
+#===== Create a new product
+
+@app.route('/products', methods=['POST'])
+def create_product():
+    try:
+        product_data = product_schema.load(request.json)
+    except ValidationError as e:
+        return jsonify(e.messages), 400
+    
+    try:
+        new_product = Product(name=product_data['name'], price=product_data['price'])
+        db.session.add(new_product)
+        db.session.commit()
+    except sqlalchemy.exc.IntegrityError as e:
+        return jsonify({"message": "User with e-mail already exists!"})
+
+    return jsonify({"message": f"{new_product.name} successfully added!"}), 201
+
+#===== Update a product by ID
+
+@app.route('/products/<int:id>', methods=['PUT'])
+def update_product(id):
+    product = db.session.get(Product, id)
+
+    if not product:
+        return jsonify({"message": "Invalid product id"}), 400
+    
+    try:
+        product_data = product_schema.load(request.json)
+    except ValidationError as e:
+        return jsonify(e.messages), 400
+    
+    product.name = product_data['name']
+    product.price = product_data['price']
+
+    db.session.commit()
+    return product_schema.jsonify(product), 200
+
+#===== Delete a product by ID
+
+@app.route('/products/<int:id>', methods=['DELETE'])
+def delete_product(id):
+    product = db.session.get(Product, id)
+
+    if not product:
+        return jsonify({"message": "Invalid product id"}), 400
+
+    db.session.delete(product)
+    db.session.commit()
+    return jsonify({"message": f"succefully deleted product {id}"}), 200
 
 
 
-# Order Endpoints
-# POST /orders: Create a new order (requires user ID and order date)
-# GET /orders/<order_id>/add_product/<product_id>: Add a product to an order (prevent duplicates)
-# DELETE /orders/<order_id>/remove_product: Remove a product from an order
-# GET /orders/user/<user_id>: Get all orders for a user
-# GET /orders/<order_id>/products: Get all products for an order
+#========== Order Endpoints ==========
+#===== POST /orders: Create a new order (requires user ID and order date)
+#===== GET /orders/<order_id>/add_product/<product_id>: Add a product to an order (prevent duplicates)
+#===== DELETE /orders/<order_id>/remove_product: Remove a product from an order
+#===== GET /orders/user/<user_id>: Get all orders for a user
+#===== GET /orders/<order_id>/products: Get all products for an order
 
 
 
