@@ -59,7 +59,7 @@ class Order(Base):
 class Product(Base):
     __tablename__ = "products"
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     price: Mapped[float] = mapped_column(Float(10), nullable=False)
 
 #Asociation Table for connecting Products and Orders
@@ -67,7 +67,7 @@ order_product = Table(
     "order_product",
     Base.metadata,
     Column("order_id", ForeignKey("orders.id"), primary_key=True),
-    Column("product_id", ForeignKey("products.id"), primary_key=True, unique=True)
+    Column[list]("product_id", ForeignKey("products.id"), primary_key=True, unique=True)
 )
 
 
@@ -214,7 +214,7 @@ def create_product():
         db.session.add(new_product)
         db.session.commit()
     except sqlalchemy.exc.IntegrityError as e:
-        return jsonify({"message": "User with e-mail already exists!"})
+        return jsonify({"message": "Product with name already exists!"})
 
     return jsonify({"message": f"{new_product.name} successfully added!"}), 201
 
@@ -254,17 +254,61 @@ def delete_product(id):
 
 
 #========== Order Endpoints ==========
-#===== POST /orders: Create a new order (requires user ID and order date)
+
+#===== Create a new order (requires user ID and order date)
+
+@app.route('/orders', methods=['POST'])
+def create_order():
+    data = request.get_json()
+
+    user_id = data.get('user_id')
+
+    if not user_id:
+        return jsonify({'error': 'Missing user id'}), 400
+
+    user = db.session.get(User, user_id)
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    order = Order(user=user)
+    db.session.add(order)
+    db.session.commit()
+
+    return jsonify({"message": f"{user.name} successfully added an order!"}), 201
+
 #===== GET /orders/<order_id>/add_product/<product_id>: Add a product to an order (prevent duplicates)
+
+@app.route('/orders/<order_id>/add_product/<product_id>')
+def add_product_to_order(order_id, product_id):
+    order = db.session.get(Order, order_id)
+    product = db.session.get(Product, product_id)
+
+    if not order:
+        return jsonify({'error': 'Order not found'}), 400
+    
+    if not product:
+        return jsonify({'error': 'Product not found'}), 400
+    
+    order_product = Order
+
 #===== DELETE /orders/<order_id>/remove_product: Remove a product from an order
+
+
+
 #===== GET /orders/user/<user_id>: Get all orders for a user
+
+
+
 #===== GET /orders/<order_id>/products: Get all products for an order
+
+
 
 
 
 if __name__ == "__main__":
     with app.app_context():
-        #db.drop_all()
+        # db.drop_all()
         db.create_all()
 
     app.run(debug=True)
