@@ -46,7 +46,7 @@ order_product = Table(
     "order_product",
     Base.metadata,
     Column("order_id", ForeignKey("orders.id"), primary_key=True),
-    Column("product_id", ForeignKey("products.id"), primary_key=True, unique=True)
+    Column("product_id", ForeignKey("products.id"), primary_key=True)
 )
 
 #User Model
@@ -291,7 +291,7 @@ def create_order():
 
     return jsonify({"message": f"{user.name} successfully added an order!"}), 201
 
-#===== GET /orders/<order_id>/add_product/<product_id>: Add a product to an order (prevent duplicates)
+#===== Add a product to an order (prevent duplicates)
 
 @app.route('/orders/<order_id>/add_product/<product_id>', methods=['GET'])
 def add_product_to_order(order_id, product_id):
@@ -313,7 +313,7 @@ def add_product_to_order(order_id, product_id):
 
     return jsonify({"message": f"{product.name} added to order # {order.id}"})
 
-#===== DELETE /orders/<order_id>/remove_product: Remove a product from an order
+#===== Remove a product from an order
 
 @app.route('/orders/<int:id>', methods=['DELETE'])
 def delete_order(id):
@@ -326,7 +326,7 @@ def delete_order(id):
     db.session.commit()
     return jsonify({"message": f"succefully deleted order {id}"}), 200
 
-#===== GET /orders/user/<user_id>: Get all orders for a user
+#===== Get all orders for a user
 
 @app.route('/orders/user/<user_id>', methods=['GET'])
 def get_user_orders(user_id):
@@ -342,7 +342,7 @@ def get_user_orders(user_id):
     return jsonify({"message": f"Order(s) # {orders_by_user} are the orders associated with {user.name}"})
 
 
-#===== GET /orders/<order_id>/products: Get all products for an order
+#===== Get all products for an order
 
 @app.route('/orders/<order_id>/products', methods=['GET'])
 def get_all_order_products(order_id):
@@ -360,6 +360,7 @@ def get_all_order_products(order_id):
     return jsonify({"message": f"Order # {order.id} contents: {products_in_order}"})
 
 
+#========== App Initialization ========== (Comment or uncomment 'drop_all' or 'create_all' to clear database or establish tables in database respectively.)
 
 if __name__ == "__main__":
     with app.app_context():
