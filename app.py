@@ -33,6 +33,22 @@ db = SQLAlchemy(model_class=Base)
 db.init_app(app)
 ma = Marshmallow(app)
 
+#Association Table for connecting Users and Orders
+user_order = Table(
+    "user_order",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id"), primary_key=True),
+    Column("order_id", ForeignKey("orders.id"), primary_key=True)
+)
+
+#Asociation Table for connecting Products and Orders
+order_product = Table(
+    "order_product",
+    Base.metadata,
+    Column("order_id", ForeignKey("orders.id"), primary_key=True),
+    Column("product_id", ForeignKey("products.id"), primary_key=True, unique=True)
+)
+
 #User Model
 class User(Base):
     __tablename__ = "users"
@@ -44,7 +60,7 @@ class User(Base):
     zip_code: Mapped[str] = mapped_column(String(5), nullable=False)
     email: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
 
-    orders: Mapped[List["Order"]] = relationship(back_populates="user")
+    user_orders: Mapped[List["Order"]] = relationship("Order", secondary=user_order, back_populates="ordered_by")
 
 #Order Model
 class Order(Base):
@@ -53,7 +69,8 @@ class Order(Base):
     order_date: Mapped[DateTime] = mapped_column(DateTime, default = datetime.datetime.now())
     user_id : Mapped[int] = mapped_column(ForeignKey("users.id"))
 
-    user: Mapped["User"] = relationship(back_populates="orders")
+    ordered_by: Mapped["User"] = relationship("User", secondary=user_order, back_populates="user_orders")
+    included_products: Mapped[List["Product"]] = relationship("Product", secondary=order_product, back_populates="in_orders")
 
 #Product Model
 class Product(Base):
@@ -62,13 +79,7 @@ class Product(Base):
     name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     price: Mapped[float] = mapped_column(Float(10), nullable=False)
 
-#Asociation Table for connecting Products and Orders
-order_product = Table(
-    "order_product",
-    Base.metadata,
-    Column("order_id", ForeignKey("orders.id"), primary_key=True),
-    Column[list]("product_id", ForeignKey("products.id"), primary_key=True, unique=True)
-)
+    in_orders: Mapped[List["Order"]] = relationship("Order", secondary=order_product, back_populates="included_products")
 
 
 
@@ -271,38 +282,82 @@ def create_order():
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
-    order = Order(user=user)
+    order = Order(user_id=user.id)
     db.session.add(order)
+
+    user.user_orders.append(order)
+
     db.session.commit()
 
     return jsonify({"message": f"{user.name} successfully added an order!"}), 201
 
 #===== GET /orders/<order_id>/add_product/<product_id>: Add a product to an order (prevent duplicates)
 
-@app.route('/orders/<order_id>/add_product/<product_id>')
+@app.route('/orders/<order_id>/add_product/<product_id>', methods=['GET'])
 def add_product_to_order(order_id, product_id):
     order = db.session.get(Order, order_id)
     product = db.session.get(Product, product_id)
 
     if not order:
-        return jsonify({'error': 'Order not found'}), 400
+        return jsonify({'error': 'Order not found'}), 404
     
     if not product:
-        return jsonify({'error': 'Product not found'}), 400
+        return jsonify({'error': 'Product not found'}), 404
     
-    order_product = Order
+    if product in order.included_products:
+        return jsonify({'error': 'Product already in order'}), 400
+    
+    order.included_products.append(product)
+
+    db.session.commit()
+
+    return jsonify({"message": f"{product.name} added to order # {order.id}"})
 
 #===== DELETE /orders/<order_id>/remove_product: Remove a product from an order
 
+@app.route('/orders/<int:id>', methods=['DELETE'])
+def delete_order(id):
+    order = db.session.get(Order, id)
 
+    if not order:
+        return jsonify({"message": "Invalid order id"}), 400
+
+    db.session.delete(order)
+    db.session.commit()
+    return jsonify({"message": f"succefully deleted order {id}"}), 200
 
 #===== GET /orders/user/<user_id>: Get all orders for a user
 
+@app.route('/orders/user/<user_id>', methods=['GET'])
+def get_user_orders(user_id):
+    user = db.session.get(User, user_id)
+
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    orders = user.user_orders
+    orders_by_user = []
+    for order in orders:
+        orders_by_user.append(order.id)
+    return jsonify({"message": f"Order(s) # {orders_by_user} are the orders associated with {user.name}"})
 
 
 #===== GET /orders/<order_id>/products: Get all products for an order
 
+@app.route('/orders/<order_id>/products', methods=['GET'])
+def get_all_order_products(order_id):
+    order = db.session.get(Order, order_id)
+    
+    if not order:
+        return jsonify({'error': 'Order not found'}), 404   
 
+    products = order.included_products
+    products_in_order = []
+
+    for product in products:
+        products_in_order.append(product.name)
+    
+    return jsonify({"message": f"Order # {order.id} contents: {products_in_order}"})
 
 
 
